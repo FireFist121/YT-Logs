@@ -1,11 +1,9 @@
 services:
   - type: web
     name: yt-mod-monitor
-    env: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    routes:
-      # This rewrite rule ensures React handles all routing (if you add multiple pages later)
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    env: node
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production

@@ -128,6 +128,14 @@ app.delete('/api/clear-database', async (req, res) => {
   res.json({ success: true });
 });
 
+import path from 'path';
+const clientBuildPath = path.join(__dirname, '../../dist');
+app.use(express.static(clientBuildPath));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientBuildPath, 'index.html'));
+});
+
 // Start background processes
 connectDB().then(() => {
   startChannelWatcher();
