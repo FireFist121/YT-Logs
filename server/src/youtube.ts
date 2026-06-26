@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const redirectUri = process.env.NODE_ENV === 'production' 
-  ? 'https://yt-logs.onrender.com/api/auth/callback' 
+  ? (process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL}/api/auth/callback` : 'https://yt-logs-1.onrender.com/api/auth/callback')
   : 'http://localhost:3001/api/auth/callback';
 
 export const oauth2Client = new google.auth.OAuth2(
