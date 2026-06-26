@@ -31,27 +31,22 @@ authRouter.get('/callback', async (req, res) => {
 
     if (tokens.refresh_token) {
       console.log('Successfully acquired refresh token!');
-      
-      // Save it to .env so it persists across server restarts
-      const envPath = path.resolve(process.cwd(), '.env');
-      let envContent = '';
-      if (fs.existsSync(envPath)) {
-        envContent = fs.readFileSync(envPath, 'utf8');
-      }
-
-      if (envContent.includes('YOUTUBE_REFRESH_TOKEN=')) {
-        envContent = envContent.replace(/YOUTUBE_REFRESH_TOKEN=.*/g, `YOUTUBE_REFRESH_TOKEN=${tokens.refresh_token}`);
-      } else {
-        envContent += `\nYOUTUBE_REFRESH_TOKEN=${tokens.refresh_token}\n`;
-      }
-      fs.writeFileSync(envPath, envContent);
-      console.log('Refresh token saved to server/.env!');
+      return res.send(`
+        <div style="font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #22c55e;">Authorization successful!</h1>
+          <p>Your new Refresh Token is:</p>
+          <pre style="background:#1a1a1a; color:#fff; padding:20px; border-radius:8px; overflow-x:auto;">${tokens.refresh_token}</pre>
+          <p style="color: #ef4444; font-weight: bold; margin-top: 20px;">
+            IMPORTANT: Render filesystems are ephemeral. You MUST copy this token and update the 
+            <code>YOUTUBE_REFRESH_TOKEN</code> environment variable in your Render dashboard, then trigger a manual deploy!
+          </p>
+        </div>
+      `);
     }
 
-    // Redirect back to the frontend app
-    res.redirect('http://localhost:5173/');
+    res.send('Authorization successful! However, no new refresh token was provided (Google only sends it the first time). If you need a new one, go to your Google Account permissions, remove access for this app, and try again.');
   } catch (error: any) {
-    console.error('Error retrieving access token', error);
-    res.status(500).send('Authentication failed: ' + error.message);
+    console.error('Error during auth callback:', error);
+    res.status(500).send('Authentication failed');
   }
 });
