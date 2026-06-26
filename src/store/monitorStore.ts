@@ -22,6 +22,7 @@ interface MonitorState {
   setPollInterval: (ms: number) => void;
   setLastPollAt: (date: Date) => void;
   resetMonitor: () => void;
+  clearEvents: () => void;
 }
 
 export const useMonitorStore = create<MonitorState>((set) => ({
@@ -66,4 +67,6 @@ export const useMonitorStore = create<MonitorState>((set) => ({
       lastPollAt: null,
       totalEventsDetected: 0,
     }),
+    
+  clearEvents: () => set({ events: [] }),
 }));

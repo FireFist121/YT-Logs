@@ -4,7 +4,7 @@ import { useMonitorStore } from '../../store/monitorStore';
 import ModEventCard from './ModEventCard';
 
 export default function ModEventFeed() {
-  const { events, status, totalEventsDetected } = useMonitorStore();
+  const { events, status, totalEventsDetected, clearEvents } = useMonitorStore();
   const topRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to top on new events (newest first)
@@ -30,11 +30,21 @@ export default function ModEventFeed() {
             </div>
           )}
         </div>
-        {totalEventsDetected > 0 && (
-          <span className="text-[10px] text-[#666] bg-[#1a1a1a] px-2.5 py-1 rounded-full border border-[#2a2a2a]">
-            {totalEventsDetected} total
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {events.length > 0 && (
+            <button
+              onClick={clearEvents}
+              className="text-[10px] text-[#888] hover:text-white bg-[#1a1a1a] hover:bg-[#2a2a2a] px-2.5 py-1 rounded-full border border-[#2a2a2a] transition-colors"
+            >
+              Clear Feed
+            </button>
+          )}
+          {totalEventsDetected > 0 && (
+            <span className="text-[10px] text-[#666] bg-[#1a1a1a] px-2.5 py-1 rounded-full border border-[#2a2a2a]">
+              {totalEventsDetected} total
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Feed content */}
