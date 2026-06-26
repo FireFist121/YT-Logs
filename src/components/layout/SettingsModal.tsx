@@ -86,7 +86,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Body */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 flex flex-col gap-6">
           
           <div className="space-y-4">
             <div>
