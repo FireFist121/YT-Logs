@@ -5,6 +5,7 @@ const DISCORD_BAN_WEBHOOK = process.env.DISCORD_BAN_WEBHOOK || '';
 
 interface ModEventPayload {
   type: 'timeout' | 'ban';
+  targetChannelId: string;
   targetDisplayName: string;
   targetProfilePicUrl?: string;
   moderatorDisplayName?: string;
@@ -14,7 +15,10 @@ interface ModEventPayload {
 }
 
 export async function sendDiscordWebhook(event: ModEventPayload) {
-  const webhookUrl = event.type === 'timeout' ? DISCORD_TIMEOUT_WEBHOOK : DISCORD_BAN_WEBHOOK;
+  const webhookUrl = event.type === 'timeout' 
+    ? process.env.DISCORD_TIMEOUT_WEBHOOK 
+    : process.env.DISCORD_BAN_WEBHOOK;
+
   if (!webhookUrl) return;
 
   const color = event.type === 'timeout' ? 16753920 : 16711680; // Orange or Red
@@ -25,18 +29,21 @@ export async function sendDiscordWebhook(event: ModEventPayload) {
     embeds: [{
       title,
       color,
-      description: `**User:** ${event.targetDisplayName}\n**Moderator:** ${event.moderatorDisplayName || 'Unknown'}${durationText}`,
-      thumbnail: event.targetProfilePicUrl ? { url: event.targetProfilePicUrl } : undefined,
+      description: `**User:** [${event.targetDisplayName}](https://youtube.com/channel/${event.targetChannelId})\n**Moderator:** ${event.moderatorDisplayName || 'Unknown'}${durationText}`,
+      thumbnail: (event.targetProfilePicUrl && event.targetProfilePicUrl.length > 0) ? { url: event.targetProfilePicUrl } : undefined,
       timestamp: event.timestamp,
       footer: { text: 'Made By - FireFist' }
     }]
   };
 
   if (event.proof && event.proof.length > 0) {
+    let proofText = event.proof.map(msg => `• ${msg}`).join('\n');
+    if (proofText.length > 1024) proofText = proofText.substring(0, 1021) + '...';
+    
     payload.embeds[0].fields = [
       {
         name: '📝 Recent Messages',
-        value: event.proof.map(msg => `• ${msg}`).join('\n')
+        value: proofText
       }
     ];
   }

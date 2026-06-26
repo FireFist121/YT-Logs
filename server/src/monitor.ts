@@ -11,6 +11,7 @@ interface MonitorState {
   processedEventIds: Set<string>;
   recentMessages: Map<string, string[]>;
   timer: NodeJS.Timeout | null;
+  isFirstPoll: boolean;
 }
 
 const activeMonitors = new Map<string, MonitorState>();
@@ -34,6 +35,7 @@ export async function startMonitor(channelId: string, liveChatId: string, videoI
     processedEventIds: new Set(),
     recentMessages: new Map(),
     timer: null,
+    isFirstPoll: true,
   };
 
   activeMonitors.set(liveChatId, state);
@@ -90,64 +92,69 @@ async function pollChat(liveChatId: string) {
         const isTempBan = userBannedDetails.banType === 'temporary';
         const targetId = userBannedDetails.bannedUserDetails.channelId;
         
-        try {
-          await ModEvent.create({
-            event_id: msg.id || '',
-            stream_video_id: state.channelId,
-            event_type: isTempBan ? 'timeout' : 'ban',
-            timestamp: new Date(publishedAt),
-            target_channel_id: targetId,
-            target_display_name: userBannedDetails.bannedUserDetails.displayName,
-            target_profile_pic_url: userBannedDetails.bannedUserDetails.profileImageUrl,
-            ban_duration_seconds: isTempBan ? parseInt(userBannedDetails.banDurationSeconds, 10) : null,
-            recent_messages: state.recentMessages.get(targetId) || [],
+        if (!state.isFirstPoll) {
+          try {
+            await ModEvent.create({
+              event_id: msg.id || '',
+              stream_video_id: state.channelId,
+              event_type: isTempBan ? 'timeout' : 'ban',
+              timestamp: new Date(publishedAt),
+              target_channel_id: targetId,
+              target_display_name: userBannedDetails.bannedUserDetails.displayName,
+              target_profile_pic_url: userBannedDetails.bannedUserDetails.profileImageUrl,
+              ban_duration_seconds: isTempBan ? parseInt(userBannedDetails.banDurationSeconds, 10) : null,
+              recent_messages: state.recentMessages.get(targetId) || [],
+            });
+          } catch (e: any) {
+            if (e.code !== 11000) console.error('ModEvent Insert Error:', e.message);
+          }
+
+          // Also update banned users table
+          try {
+            const existing = await BannedUser.findOne({ channel_id: targetId });
+            const isAlreadyPermanent = existing?.ban_type === 'permanent' && existing?.status === 'active';
+            const finalBanType = (isTempBan && !isAlreadyPermanent) ? 'temporary' : 'permanent';
+
+            await BannedUser.findOneAndUpdate(
+              { channel_id: targetId },
+              {
+                $set: {
+                  display_name: userBannedDetails.bannedUserDetails.displayName,
+                  profile_pic_url: userBannedDetails.bannedUserDetails.profileImageUrl,
+                  ban_type: finalBanType,
+                  ban_duration_seconds: finalBanType === 'temporary' ? parseInt(userBannedDetails.banDurationSeconds, 10) : null,
+                  banned_at: new Date(publishedAt),
+                  status: 'active',
+                  stream_video_id: state.channelId,
+                  banned_by_name: msg.authorDetails?.displayName,
+                  recent_messages: state.recentMessages.get(targetId) || [],
+                  unbanned_at: null,
+                  unbanned_by_name: null
+                }
+              },
+              { upsert: true }
+            );
+          } catch (upsertErr) {
+            console.error('Upsert Error:', upsertErr);
+          }
+          
+          await sendDiscordWebhook({
+            type: isTempBan ? 'timeout' : 'ban',
+            targetChannelId: targetId,
+            targetDisplayName: userBannedDetails.bannedUserDetails.displayName,
+            targetProfilePicUrl: userBannedDetails.bannedUserDetails.profileImageUrl,
+            moderatorDisplayName: msg.authorDetails?.displayName || undefined,
+            banDurationSeconds: isTempBan ? parseInt(userBannedDetails.banDurationSeconds, 10) : undefined,
+            timestamp: new Date(publishedAt).toISOString(),
+            proof: state.recentMessages.get(targetId) || [],
           });
-        } catch (e: any) {
-          if (e.code !== 11000) console.error('ModEvent Insert Error:', e.message);
+
+          console.log(`Logged ${isTempBan ? 'timeout' : 'ban'} for ${userBannedDetails.bannedUserDetails.displayName}`);
         }
-
-        // Also update banned users table
-        try {
-          const existing = await BannedUser.findOne({ channel_id: targetId });
-          const isAlreadyPermanent = existing?.ban_type === 'permanent' && existing?.status === 'active';
-          const finalBanType = (isTempBan && !isAlreadyPermanent) ? 'temporary' : 'permanent';
-
-          await BannedUser.findOneAndUpdate(
-            { channel_id: targetId },
-            {
-              $set: {
-                display_name: userBannedDetails.bannedUserDetails.displayName,
-                profile_pic_url: userBannedDetails.bannedUserDetails.profileImageUrl,
-                ban_type: finalBanType,
-                ban_duration_seconds: finalBanType === 'temporary' ? parseInt(userBannedDetails.banDurationSeconds, 10) : null,
-                banned_at: new Date(publishedAt),
-                status: 'active',
-                stream_video_id: state.channelId,
-                banned_by_name: msg.authorDetails?.displayName,
-                recent_messages: state.recentMessages.get(targetId) || [],
-                unbanned_at: null,
-                unbanned_by_name: null
-              }
-            },
-            { upsert: true }
-          );
-        } catch (upsertErr) {
-          console.error('Upsert Error:', upsertErr);
-        }
-        
-        await sendDiscordWebhook({
-          type: isTempBan ? 'timeout' : 'ban',
-          targetDisplayName: userBannedDetails.bannedUserDetails.displayName,
-          targetProfilePicUrl: userBannedDetails.bannedUserDetails.profileImageUrl,
-          moderatorDisplayName: msg.authorDetails?.displayName || undefined,
-          banDurationSeconds: isTempBan ? parseInt(userBannedDetails.banDurationSeconds, 10) : undefined,
-          timestamp: new Date(publishedAt).toISOString(),
-          proof: state.recentMessages.get(targetId) || [],
-        });
-
-        console.log(`Logged ${isTempBan ? 'timeout' : 'ban'} for ${userBannedDetails.bannedUserDetails.displayName}`);
       }
     }
+
+    state.isFirstPoll = false;
 
   } catch (err: any) {
     console.error(`Error polling chat ${liveChatId}:`, err.message);
