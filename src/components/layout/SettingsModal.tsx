@@ -63,11 +63,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-      <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh] animate-[slideUp_0.2s_ease-out]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+      <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-full overflow-hidden animate-[slideUp_0.2s_ease-out]">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-[#2a2a2a]">
+        <div className="flex-none flex items-center justify-between p-5 border-b border-[#2a2a2a]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#1e1e1e] flex items-center justify-center border border-[#333]">
               <Webhook className="text-[#888]" size={20} />
@@ -164,7 +164,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-[#2a2a2a] bg-[#0d0d0d] rounded-b-2xl flex justify-end gap-3">
+        <div className="flex-none p-5 border-t border-[#2a2a2a] bg-[#0d0d0d] flex justify-end gap-3">
           <button
             onClick={onClose}
             className="px-5 py-2.5 text-sm font-medium text-[#888] hover:text-white transition-colors"
