@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogOut, Wifi, WifiOff, AlertTriangle, Settings, Lock } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useMonitorStore } from '../../store/monitorStore';
