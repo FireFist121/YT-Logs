@@ -66,11 +66,15 @@ function AppContent() {
 }
 
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
 
 export default function App() {
-  // Simple check for privacy policy route before any auth logic
+  // Simple check for privacy policy and terms route before any auth logic
   if (window.location.pathname === '/privacy') {
     return <PrivacyPolicyPage />;
+  }
+  if (window.location.pathname === '/terms') {
+    return <TermsPage />;
   }
 
   const [isUnlocked, setIsUnlocked] = useState(() => {

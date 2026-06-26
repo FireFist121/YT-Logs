@@ -93,9 +93,16 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle }:
 
       {/* Footer / Credits */}
       <div className={`mt-auto px-4 py-4 border-t border-[#2a2a2a] ${collapsed ? 'hidden' : 'block'}`}>
-        <p className="text-[10px] text-[#555] text-center font-medium tracking-wide">
-          Made By - FireFist
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-3 text-[10px] text-[#888]">
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-red-400 transition-colors">Privacy</a>
+            <span>•</span>
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="hover:text-red-400 transition-colors">Terms</a>
+          </div>
+          <p className="text-[10px] text-[#555] text-center font-medium tracking-wide">
+            Made By - FireFist
+          </p>
+        </div>
       </div>
 
       {/* Collapse toggle */}
