@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-8 overflow-y-auto">
+    <div className="h-screen w-full bg-[#050505] text-white p-8 overflow-y-auto">
       <div className="max-w-3xl mx-auto bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-8 shadow-2xl">
         <h1 className="text-3xl font-bold mb-6 text-red-500">Privacy Policy for YT-Logs</h1>
         
