@@ -5,6 +5,11 @@ import path from 'path';
 
 export const authRouter = Router();
 
+authRouter.get('/status', (req, res) => {
+  const hasToken = !!process.env.YOUTUBE_REFRESH_TOKEN;
+  res.json({ isConfigured: hasToken });
+});
+
 // Route to generate the Google OAuth URL
 authRouter.get('/url', (req, res) => {
   const url = oauth2Client.generateAuthUrl({

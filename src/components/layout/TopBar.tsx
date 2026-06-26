@@ -14,6 +14,16 @@ export default function TopBar({ onLogout, activePage }: TopBarProps) {
   const { user } = useAuthStore();
   const { status, lastPollAt, totalEventsDetected } = useMonitorStore();
   const [showSettings, setShowSettings] = useState(false);
+  const [backendConfigured, setBackendConfigured] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.isConfigured) setBackendConfigured(true);
+      })
+      .catch(console.error);
+  }, []);
 
   const quotaPercent = getQuotaPercent();
   const quotaRemaining = getQuotaRemaining();
@@ -116,14 +126,29 @@ export default function TopBar({ onLogout, activePage }: TopBarProps) {
               <Lock size={15} />
             </button>
           )}
-          <button
-            onClick={() => window.location.href = '/api/auth/url'}
-            title="Authorize Backend for 24/7 Monitoring"
-            className="text-[#666] hover:text-green-400 transition-colors p-1.5 rounded-lg hover:bg-green-500/10 flex items-center gap-1 border border-[#2a2a2a] hover:border-green-500/30 text-[10px] px-2 ml-2"
-          >
-            <Wifi size={13} />
-            <span>Enable 24/7 Backend</span>
-          </button>
+          {backendConfigured ? (
+            <button
+              onClick={() => {
+                if (confirm('Backend is already running. Do you want to re-authenticate and restart it?')) {
+                  window.location.href = '/api/auth/url';
+                }
+              }}
+              title="24/7 Backend is Running (Click to Restart)"
+              className="text-green-400 hover:text-green-300 transition-colors p-1.5 rounded-lg hover:bg-green-500/10 flex items-center gap-1 border border-green-500/30 text-[10px] px-2 ml-2"
+            >
+              <Wifi size={13} />
+              <span>24/7 Backend Running</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => window.location.href = '/api/auth/url'}
+              title="Authorize Backend for 24/7 Monitoring"
+              className="text-[#666] hover:text-green-400 transition-colors p-1.5 rounded-lg hover:bg-green-500/10 flex items-center gap-1 border border-[#2a2a2a] hover:border-green-500/30 text-[10px] px-2 ml-2"
+            >
+              <Wifi size={13} />
+              <span>Enable 24/7 Backend</span>
+            </button>
+          )}
 
           <button
             onClick={() => setShowSettings(true)}
