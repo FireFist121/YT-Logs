@@ -63,8 +63,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-      <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-[slideUp_0.2s_ease-out]">
+    <div className="fixed inset-0 z-50 grid place-items-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm h-[100dvh] w-screen animate-[fadeIn_0.2s_ease-out]">
+      <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl flex flex-col min-h-0 max-h-full overflow-hidden animate-[slideUp_0.2s_ease-out]">
         
         {/* Header */}
         <div className="flex-none flex items-center justify-between p-5 border-b border-[#2a2a2a]">
