@@ -65,7 +65,14 @@ function AppContent() {
   );
 }
 
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+
 export default function App() {
+  // Simple check for privacy policy route before any auth logic
+  if (window.location.pathname === '/privacy') {
+    return <PrivacyPolicyPage />;
+  }
+
   const [isUnlocked, setIsUnlocked] = useState(() => {
     // If no password is configured, the app is unlocked by default
     if (!import.meta.env.VITE_ADMIN_PASSWORD) return true;
