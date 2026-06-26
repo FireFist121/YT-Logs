@@ -173,6 +173,18 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
           You must be the channel owner or a moderator of the stream.
         </p>
       </div>
+
+      {/* Privacy Policy Footer */}
+      <div className="absolute bottom-4 text-center w-full">
+        <a 
+          href="/privacy" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+        >
+          Privacy Policy
+        </a>
+      </div>
     </div>
   );
 }
