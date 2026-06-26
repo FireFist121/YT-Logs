@@ -1,14 +1,8 @@
-import { google } from 'googleapis';
 import { WatchedChannel, ChangeLog } from './db';
 import { startMonitor } from './monitor';
+import { youtube } from './youtube';
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 const WATCH_INTERVAL_MS = 15 * 60 * 1000;
-
-const youtube = google.youtube({
-  version: 'v3',
-  auth: YOUTUBE_API_KEY,
-});
 
 export function startChannelWatcher() {
   console.log('Starting channel watcher service...');
