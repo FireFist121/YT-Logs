@@ -35,7 +35,7 @@ export async function sendDiscordWebhook(event: ModEventPayload) {
   if (event.proof && event.proof.length > 0) {
     payload.embeds[0].fields = [
       {
-        name: '📝 Proof (Recent Messages)',
+        name: '📝 Recent Messages',
         value: event.proof.map(msg => `• ${msg}`).join('\n')
       }
     ];
