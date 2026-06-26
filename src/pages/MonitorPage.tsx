@@ -9,7 +9,7 @@ export default function MonitorPage() {
 
   useEffect(() => {
     if (status === 'idle') {
-      fetch('http://localhost:3001/api/monitor/status')
+      fetch('/api/monitor/status')
         .then(res => res.json())
         .then(data => {
           if (data.activeMonitors && data.activeMonitors.length > 0) {

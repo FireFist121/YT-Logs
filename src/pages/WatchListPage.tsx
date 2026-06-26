@@ -121,15 +121,16 @@ export default function WatchListPage() {
 
   const toggleAutoMonitor = async (channelId: string, current: boolean) => {
     try {
-      await fetch(`http://localhost:3001/api/watched-channels/${channelId}/toggle`, { method: 'POST' });
+      await fetch(`/api/watched-channels/${channelId}/toggle`, { method: 'POST' });
     } catch (err) {
       console.error(err);
     }
+    fetchWatchedChannels().then(setWatchedChannels);
   };
 
   const startMonitoring = async (videoId: string, liveChatId: string) => {
     try {
-      await fetch('http://localhost:3001/api/monitor/start', {
+      await fetch('/api/monitor/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channelId: 'manual', liveChatId })

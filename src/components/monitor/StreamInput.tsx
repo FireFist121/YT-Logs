@@ -27,7 +27,7 @@ export default function StreamInput() {
     try {
       const chatId = await getLiveChatId(videoId, accessToken!);
       
-      await fetch('http://localhost:3001/api/monitor/start', {
+      await fetch('/api/monitor/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channelId: 'manual', liveChatId: chatId, videoId: videoId })
@@ -51,7 +51,7 @@ export default function StreamInput() {
   const handleStop = async () => {
     if (liveChatId) {
       try {
-        await fetch('http://localhost:3001/api/monitor/stop', {
+        await fetch('/api/monitor/stop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ liveChatId })

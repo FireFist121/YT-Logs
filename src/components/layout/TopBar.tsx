@@ -117,7 +117,7 @@ export default function TopBar({ onLogout, activePage }: TopBarProps) {
             </button>
           )}
           <button
-            onClick={() => window.location.href = 'http://localhost:3001/api/auth/url'}
+            onClick={() => window.location.href = '/api/auth/url'}
             title="Authorize Backend for 24/7 Monitoring"
             className="text-[#666] hover:text-green-400 transition-colors p-1.5 rounded-lg hover:bg-green-500/10 flex items-center gap-1 border border-[#2a2a2a] hover:border-green-500/30 text-[10px] px-2 ml-2"
           >
