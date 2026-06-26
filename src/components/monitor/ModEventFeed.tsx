@@ -31,14 +31,17 @@ export default function ModEventFeed() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {events.length > 0 && (
-            <button
-              onClick={clearEvents}
-              className="text-[10px] text-[#888] hover:text-white bg-[#1a1a1a] hover:bg-[#2a2a2a] px-2.5 py-1 rounded-full border border-[#2a2a2a] transition-colors"
-            >
-              Clear Feed
-            </button>
-          )}
+          <button
+            onClick={clearEvents}
+            disabled={events.length === 0}
+            className={`text-[10px] px-2.5 py-1 rounded-full border transition-colors ${
+              events.length === 0 
+                ? 'text-[#444] bg-[#111] border-[#1e1e1e] cursor-not-allowed' 
+                : 'text-[#888] hover:text-white bg-[#1a1a1a] hover:bg-[#2a2a2a] border-[#2a2a2a]'
+            }`}
+          >
+            Clear Feed
+          </button>
           {totalEventsDetected > 0 && (
             <span className="text-[10px] text-[#666] bg-[#1a1a1a] px-2.5 py-1 rounded-full border border-[#2a2a2a]">
               {totalEventsDetected} total
