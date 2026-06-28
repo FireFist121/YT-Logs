@@ -53,6 +53,14 @@ export function stopMonitor(liveChatId: string) {
   console.log(`Stopped monitoring chat ${liveChatId}`);
 }
 
+export function stopMonitorByChannelId(channelId: string) {
+  for (const [chatId, state] of activeMonitors.entries()) {
+    if (state.channelId === channelId) {
+      stopMonitor(chatId);
+    }
+  }
+}
+
 async function pollChat(liveChatId: string) {
   const state = activeMonitors.get(liveChatId);
   if (!state) return;

@@ -38,12 +38,12 @@ export const useAuthStore = create<AuthState>((set, get) => {
   const initialToken = localStorage.getItem(TOKEN_KEY);
   const initialExpiry = localStorage.getItem(EXPIRY_KEY) ? Number(localStorage.getItem(EXPIRY_KEY)) : null;
   const initialUser = loadPersistedUser();
-  const initialAuth = !!initialToken && !!initialExpiry && Date.now() < initialExpiry - 60_000;
+  const initialAuth = !!initialUser;
 
   return {
-    accessToken: initialAuth ? initialToken : null,
-    tokenExpiry: initialAuth ? initialExpiry : null,
-    user: initialAuth ? initialUser : null,
+    accessToken: initialToken,
+    tokenExpiry: initialExpiry,
+    user: initialUser,
     isAuthenticated: initialAuth,
 
     setToken: (token, expiresIn) => {

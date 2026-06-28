@@ -1,5 +1,5 @@
 import { WatchedChannel, ChangeLog } from './db';
-import { startMonitor } from './monitor';
+import { startMonitor, stopMonitorByChannelId } from './monitor';
 import { youtube } from './youtube';
 
 const WATCH_INTERVAL_MS = 15 * 60 * 1000;
@@ -17,6 +17,10 @@ async function checkAll() {
 
     for (const channel of watchedChannels) {
       try {
+        if (!channel.auto_monitor) {
+          continue; // Completely skip querying YouTube if auto-monitor is off
+        }
+
         const liveStatus = await checkChannelLiveStatus(channel.channel_id);
 
         await WatchedChannel.updateOne(
@@ -31,8 +35,11 @@ async function checkAll() {
           }
         );
 
-        if (liveStatus.isLive && liveStatus.liveChatId && channel.auto_monitor) {
+        if (liveStatus.isLive && liveStatus.liveChatId) {
           startMonitor(channel.channel_id, liveStatus.liveChatId, liveStatus.videoId || undefined);
+        } else if (!liveStatus.isLive) {
+          // Stream ended, stop monitoring automatically
+          stopMonitorByChannelId(channel.channel_id);
         }
       } catch (err: any) {
         console.warn(`Failed to check channel ${channel.display_name}:`, err.message);
