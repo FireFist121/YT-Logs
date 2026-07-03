@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3001;
 
 import { startChannelWatcher } from './watcher';
 import { startMonitor, stopMonitor, getActiveMonitors } from './monitor';
-import { authRouter } from './auth';
+import { authRouter, loadRefreshTokenFromDB } from './auth';
 
 app.use('/api/auth', authRouter);
 
@@ -137,7 +137,8 @@ app.use((req, res) => {
 });
 
 // Start background processes
-connectDB().then(() => {
+connectDB().then(async () => {
+  await loadRefreshTokenFromDB(); // Load token from MongoDB (or env fallback)
   startChannelWatcher();
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

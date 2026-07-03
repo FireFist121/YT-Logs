@@ -12,12 +12,7 @@ export const oauth2Client = new google.auth.OAuth2(
   redirectUri
 );
 
-if (process.env.YOUTUBE_REFRESH_TOKEN) {
-  oauth2Client.setCredentials({
-    refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
-  });
-}
-
+// Token is loaded from MongoDB at startup via loadRefreshTokenFromDB() in auth.ts
 export const youtube = google.youtube({
   version: 'v3',
   auth: oauth2Client,

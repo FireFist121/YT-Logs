@@ -78,3 +78,11 @@ const changeLogSchema = new mongoose.Schema({
 });
 
 export const ChangeLog = mongoose.model('ChangeLog', changeLogSchema);
+
+const appSettingsSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: String, required: true },
+  updated_at: { type: Date, default: Date.now },
+});
+
+export const AppSettings = mongoose.model('AppSettings', appSettingsSchema);
