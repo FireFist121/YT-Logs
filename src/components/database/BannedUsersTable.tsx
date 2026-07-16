@@ -198,6 +198,7 @@ export default function BannedUsersTable() {
             name.trim().replace(/\s+/g, ' ').normalize('NFC').toLowerCase();
 
           if (newName && normalizeName(newName) !== normalizeName(storedName)) {
+            // Name genuinely changed
             userUpdate.current_display_name = newName;
             userUpdate.has_name_change = true;
             logs.push({
@@ -208,6 +209,10 @@ export default function BannedUsersTable() {
               new_value: newName,
             });
             changesFound++;
+          } else if (newName && user.hasNameChange) {
+            // Names now match — clear the false-positive flag
+            userUpdate.has_name_change = false;
+            userUpdate.current_display_name = null;
           }
 
           let isPicDifferent = false;
@@ -234,6 +239,10 @@ export default function BannedUsersTable() {
               new_value: newPic,
             });
             changesFound++;
+          } else if (newPic && user.hasPicChange) {
+            // Pic now matches — clear the false-positive flag
+            userUpdate.has_pic_change = false;
+            userUpdate.current_profile_pic_url = null;
           }
         }
 
