@@ -1,4 +1,4 @@
-// Discord Webhook Sender — rate-limit-aware queue with auto-retry
+// Discord Webhook Sender — rate-limit-aware queue with per-URL cooldown tracking
 
 // Startup validation — log whether webhook URLs are configured
 if (process.env.DISCORD_TIMEOUT_WEBHOOK) {
@@ -27,15 +27,17 @@ interface QueueItem {
   webhookUrl: string;
   payload: object;
   label: string;
-  retries: number;
 }
 
-// Separate queues per webhook URL so one channel's rate limit doesn't block the other
+// Per-webhook-URL state
 const queues = new Map<string, QueueItem[]>();
 const processing = new Set<string>();
 
-const MAX_RETRIES = 5;
-const MIN_SEND_INTERVAL_MS = 1500; // min gap between sends to stay under Discord's rate limit
+// Track when each webhook URL is safe to use again (rate limit cooldown)
+const rateLimitedUntil = new Map<string, number>();
+
+const MIN_SEND_INTERVAL_MS = 1500; // min gap between sends (under Discord's 5 req/2s limit)
+const MAX_RETRY_WAIT_MS = 10 * 60 * 1000; // respect up to 10 minutes of Retry-After
 
 function enqueue(item: QueueItem) {
   const key = item.webhookUrl;
@@ -45,12 +47,21 @@ function enqueue(item: QueueItem) {
 }
 
 async function processQueue(key: string) {
-  if (processing.has(key)) return; // already running for this webhook
+  if (processing.has(key)) return;
   processing.add(key);
 
   while (true) {
     const queue = queues.get(key);
     if (!queue || queue.length === 0) break;
+
+    // Respect active rate limit cooldown — wait it out fully before sending
+    const cooldownUntil = rateLimitedUntil.get(key) || 0;
+    const now = Date.now();
+    if (cooldownUntil > now) {
+      const waitMs = cooldownUntil - now;
+      console.log(`[Discord] Waiting ${Math.ceil(waitMs / 1000)}s for rate limit cooldown before sending "${queue[0].label}"...`);
+      await sleep(waitMs);
+    }
 
     const item = queue[0];
 
@@ -62,22 +73,29 @@ async function processQueue(key: string) {
       });
 
       if (response.status === 429) {
-        // Rate limited — read Retry-After and wait (cap at 30s to avoid long freezes)
         const retryAfterHeader = response.headers.get('Retry-After');
-        const retryAfterRaw = retryAfterHeader ? Math.ceil(parseFloat(retryAfterHeader) * 1000) : 5000;
-        const retryAfterMs = Math.min(retryAfterRaw, 30000); // never wait more than 30s
+        const retryAfterMs = retryAfterHeader
+          ? Math.ceil(parseFloat(retryAfterHeader) * 1000)
+          : 10000;
 
-        console.warn(`[Discord] Rate limited (429) for "${item.label}". Retrying in ${retryAfterMs}ms... (attempt ${item.retries + 1}/${MAX_RETRIES})`);
+        // Cap to MAX_RETRY_WAIT_MS so we don't wait forever, but still respect long bans
+        const waitMs = Math.min(retryAfterMs, MAX_RETRY_WAIT_MS);
 
-        if (item.retries >= MAX_RETRIES) {
-          console.error(`[Discord] Dropped event "${item.label}" after ${MAX_RETRIES} retries.`);
-          queue.shift(); // give up on this item
-        } else {
-          item.retries++;
-          await sleep(retryAfterMs);
-        }
-        continue; // retry same item
+        // Store the cooldown so we don't attempt ANY sends on this URL until it's safe
+        rateLimitedUntil.set(key, Date.now() + waitMs);
+
+        console.warn(
+          `[Discord] Rate limited (429) for "${item.label}". ` +
+          `Cooling down for ${Math.ceil(waitMs / 1000)}s ` +
+          `(Discord asked for ${Math.ceil(retryAfterMs / 1000)}s).`
+        );
+
+        // Don't shift — retry this item after cooldown expires (loop continues)
+        continue;
       }
+
+      // Clear any cooldown on success
+      rateLimitedUntil.delete(key);
 
       if (!response.ok) {
         const errorBody = await response.text();
@@ -86,20 +104,14 @@ async function processQueue(key: string) {
         console.log(`[Discord] ✓ Sent successfully: ${item.label}`);
       }
 
-      queue.shift(); // move to next item
+      queue.shift(); // done with this item
 
-      // Minimum delay between sends to stay under Discord's rate limit
+      // Minimum spacing between sends to stay under Discord's rate limit
       if (queue.length > 0) await sleep(MIN_SEND_INTERVAL_MS);
 
     } catch (err: any) {
       console.error(`[Discord] Network error for "${item.label}":`, err.message);
-      if (item.retries >= MAX_RETRIES) {
-        console.error(`[Discord] Dropped event "${item.label}" after ${MAX_RETRIES} retries.`);
-        queue.shift();
-      } else {
-        item.retries++;
-        await sleep(2000); // wait 2s before retry on network error
-      }
+      await sleep(5000); // wait 5s on network error before retry
     }
   }
 
@@ -138,15 +150,9 @@ export async function sendDiscordWebhook(event: ModEventPayload) {
   if (event.proof && event.proof.length > 0) {
     let proofText = event.proof.map(msg => `• ${msg}`).join('\n');
     if (proofText.length > 1024) proofText = proofText.substring(0, 1021) + '...';
-
-    payload.embeds[0].fields = [
-      {
-        name: '📝 Recent Messages',
-        value: proofText
-      }
-    ];
+    payload.embeds[0].fields = [{ name: '📝 Recent Messages', value: proofText }];
   }
 
   const label = `${event.type} for ${event.targetDisplayName}`;
-  enqueue({ webhookUrl, payload, label, retries: 0 });
+  enqueue({ webhookUrl, payload, label });
 }
