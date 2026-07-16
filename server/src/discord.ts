@@ -253,6 +253,20 @@ async function flushQueue() {
         continue;
       }
 
+      if (response.status === 401 || response.status === 404) {
+        const body = await response.text();
+        console.error(`[Discord] ❌ Webhook deleted or invalid [${response.status}]:`, body);
+        
+        // Mark all pending rows for this URL as permanently failed
+        await DiscordQueue.updateMany(
+          { webhook_url: webhookUrl, status: 'pending' },
+          { $set: { status: 'failed' } }
+        );
+        // Clear from memory so we don't try again
+        embedBuffer.set(webhookUrl, []);
+        continue;
+      }
+
       if (!response.ok) {
         const body = await response.text();
         console.error(`[Discord] ❌ Batch failed [${response.status}]:`, body);
