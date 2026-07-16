@@ -18,9 +18,11 @@ type SortDir = 'asc' | 'desc';
 type FilterStatus = 'all' | 'active' | 'unbanned';
 type FilterBanType = 'all' | 'permanent' | 'temporary';
 type GroupBy = 'none' | 'month' | 'stream';
+type ActiveTab = 'bans' | 'timeouts';
 
 export default function BannedUsersTable() {
   const { accessToken } = useAuthStore();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('bans');
   const [search, setSearch] = useState('');
   const [filterBanType, setFilterBanType] = useState<FilterBanType>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -28,6 +30,8 @@ export default function BannedUsersTable() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const [allUsers, setAllUsers] = useState<BannedUser[] | undefined>(undefined);
 
@@ -51,10 +55,14 @@ export default function BannedUsersTable() {
 
   const filtered = useMemo(() => {
     if (!allUsers) return [];
+    const tabType = activeTab === 'bans' ? 'permanent' : 'temporary';
     return allUsers
-      .filter((u) => u.banType === 'permanent')
+      .filter((u) => u.banType === tabType)
       .filter((u) => {
         if (filterStatus !== 'all' && u.status !== filterStatus) return false;
+        const bannedDate = new Date(u.bannedAt);
+        if (dateFrom && bannedDate < new Date(dateFrom)) return false;
+        if (dateTo && bannedDate > new Date(dateTo + 'T23:59:59')) return false;
         if (search) {
           const s = search.toLowerCase();
           return (
@@ -83,7 +91,7 @@ export default function BannedUsersTable() {
         }
         return sortDir === 'asc' ? cmp : -cmp;
       });
-  }, [allUsers, search, filterStatus, sortField, sortDir]);
+  }, [allUsers, search, filterStatus, sortField, sortDir, activeTab, dateFrom, dateTo]);
 
   const changesCount = allUsers?.filter(
     (u) => u.hasNameChange || u.hasPicChange || u.channelDeleted
@@ -323,12 +331,36 @@ export default function BannedUsersTable() {
       {/* ── TABS & TOP ACTIONS ── */}
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-1 bg-[#0d0d0d] border border-[#1e1e1e] rounded-xl p-1 w-fit">
-          <span className="text-white px-4 py-2 font-medium text-sm flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('bans')}
+            className={`px-4 py-2 font-medium text-sm flex items-center gap-2 rounded-lg transition-all ${
+              activeTab === 'bans'
+                ? 'bg-red-500/15 text-red-400 border border-red-500/25'
+                : 'text-[#555] hover:text-white'
+            }`}
+          >
             Bans
-            <span className="bg-[#1e1e1e] text-[#555] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              {allUsers?.filter(u => u.banType === 'permanent').length ?? 0}
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              activeTab === 'bans' ? 'bg-red-500/20 text-red-400' : 'bg-[#1e1e1e] text-[#555]'
+            }`}>
+              {permanentCount}
             </span>
-          </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('timeouts')}
+            className={`px-4 py-2 font-medium text-sm flex items-center gap-2 rounded-lg transition-all ${
+              activeTab === 'timeouts'
+                ? 'bg-orange-500/15 text-orange-400 border border-orange-500/25'
+                : 'text-[#555] hover:text-white'
+            }`}
+          >
+            Timeouts
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              activeTab === 'timeouts' ? 'bg-orange-500/20 text-orange-400' : 'bg-[#1e1e1e] text-[#555]'
+            }`}>
+              {temporaryCount}
+            </span>
+          </button>
         </div>
 
         <button
@@ -387,6 +419,33 @@ export default function BannedUsersTable() {
           <option value="stream">Group by Stream</option>
         </select>
 
+        {/* Date From */}
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="From date"
+          className="bg-[#111] border border-[#1e1e1e] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF0000]/40 cursor-pointer [color-scheme:dark]"
+        />
+
+        {/* Date To */}
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="To date"
+          className="bg-[#111] border border-[#1e1e1e] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF0000]/40 cursor-pointer [color-scheme:dark]"
+        />
+
+        {(dateFrom || dateTo) && (
+          <button
+            onClick={() => { setDateFrom(''); setDateTo(''); }}
+            className="text-xs text-[#555] hover:text-white transition-colors px-2"
+          >
+            Clear dates
+          </button>
+        )}
+
         {/* Actions */}
         <button
           onClick={handleExportCSV}
@@ -409,7 +468,7 @@ export default function BannedUsersTable() {
       <div className="flex items-center gap-4 mb-3 px-1">
         <div className="flex items-center gap-1.5 text-[#666] text-xs">
           <Database size={11} />
-          <span>{allUsers?.length ?? 0} total users</span>
+          <span>{activeTab === 'bans' ? permanentCount : temporaryCount} total {activeTab === 'bans' ? 'bans' : 'timeouts'}</span>
         </div>
         <span className="text-[#333]">|</span>
         <span className="text-xs text-[#555]">
