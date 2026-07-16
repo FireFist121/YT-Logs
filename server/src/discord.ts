@@ -3,7 +3,8 @@
 // Batching drastically reduces the number of webhook calls → no more rate limits.
 
 import { DiscordQueue } from './db';
-import { ProxyAgent } from 'undici';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import axios from 'axios';
 
 // ─── Startup validation ─────────────────────────────────────────────────────
 if (process.env.DISCORD_TIMEOUT_WEBHOOK) {
@@ -18,10 +19,10 @@ if (process.env.DISCORD_BAN_WEBHOOK) {
 }
 
 const PROXY_URL = process.env.DISCORD_PROXY || process.env.HTTP_PROXY;
-let proxyDispatcher: any = undefined;
+let proxyAgent: any = undefined;
 if (PROXY_URL) {
   console.log(`[Discord] Proxy configured ✓`);
-  proxyDispatcher = new ProxyAgent(PROXY_URL);
+  proxyAgent = new HttpsProxyAgent(PROXY_URL);
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -203,37 +204,31 @@ async function flushQueue() {
     console.log(`[Discord] Sending batch of ${batch.length} embed(s) to ${webhookUrl.substring(0, 60)}...`);
 
     try {
-      const fetchOptions: any = {
-        method: 'POST',
+      const axiosOptions: any = {
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ embeds: batch }),
+        validateStatus: () => true // Resolve promise for all status codes
       };
       
-      if (proxyDispatcher) {
-        fetchOptions.dispatcher = proxyDispatcher;
+      if (proxyAgent) {
+        axiosOptions.httpsAgent = proxyAgent;
       }
 
-      const response = await fetch(webhookUrl, fetchOptions);
+      const response = await axios.post(webhookUrl, { embeds: batch }, axiosOptions);
+      const status = response.status;
 
-      if (response.status === 429) {
+      if (status === 429) {
         // Rate limited — read exact Retry-After from Discord
         let retryAfterSec = 60; // default 60s
         
         // Always try to read headers first
-        const header1 = response.headers.get('x-ratelimit-reset-after');
-        const header2 = response.headers.get('Retry-After');
+        const header1 = response.headers['x-ratelimit-reset-after'];
+        const header2 = response.headers['retry-after'];
         if (header1) retryAfterSec = parseFloat(header1);
         else if (header2) retryAfterSec = parseFloat(header2);
 
         // Try reading JSON body just in case it's more accurate
-        try {
-          const bodyText = await response.text();
-          if (bodyText) {
-            const body = JSON.parse(bodyText);
-            if (body.retry_after != null) retryAfterSec = parseFloat(body.retry_after);
-          }
-        } catch (e) {
-          // ignore parsing error
+        if (response.data && response.data.retry_after != null) {
+          retryAfterSec = parseFloat(response.data.retry_after);
         }
 
         buffer.unshift(...batch); // restore batch to front
@@ -267,9 +262,9 @@ async function flushQueue() {
         continue;
       }
 
-      if (response.status === 401 || response.status === 404) {
-        const body = await response.text();
-        console.error(`[Discord] ❌ Webhook deleted or invalid [${response.status}]:`, body);
+      if (status === 401 || status === 404) {
+        const body = JSON.stringify(response.data);
+        console.error(`[Discord] ❌ Webhook deleted or invalid [${status}]:`, body);
         
         // Mark all pending rows for this URL as permanently failed
         await DiscordQueue.updateMany(
@@ -281,9 +276,9 @@ async function flushQueue() {
         continue;
       }
 
-      if (!response.ok) {
-        const body = await response.text();
-        console.error(`[Discord] ❌ Batch failed [${response.status}]:`, body);
+      if (status >= 400) {
+        const body = JSON.stringify(response.data);
+        console.error(`[Discord] ❌ Batch failed [${status}]:`, body);
         // Restore failed batch to front of buffer for retry
         buffer.unshift(...batch);
         embedBuffer.set(webhookUrl, buffer);

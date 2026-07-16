@@ -14,10 +14,12 @@
   "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
+    "axios": "^1.18.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "googleapis": "^173.0.0",
+    "https-proxy-agent": "^9.1.0",
     "mongoose": "^9.7.2",
     "undici": "^8.7.0"
   },
