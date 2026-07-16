@@ -158,6 +158,9 @@ async function rehydrateBufferFromDB() {
   }
 }
 
+// Track rate limits per URL so we don't block the whole worker loop
+const urlNextRetryTime = new Map<string, number>();
+
 /**
  * Core flush function.
  *
@@ -173,6 +176,12 @@ async function flushQueue() {
 
   for (const [webhookUrl, buffer] of embedBuffer.entries()) {
     if (buffer.length === 0) continue;
+
+    // Check if this URL is currently rate limited
+    const retryTime = urlNextRetryTime.get(webhookUrl) || 0;
+    if (now < retryTime) {
+      continue; // Skip this URL, it's on a rate-limit cooldown
+    }
 
     // Respect the batch window — don't flush if last flush was too recent,
     // UNLESS the buffer is already full (10 embeds).
@@ -193,18 +202,31 @@ async function flushQueue() {
       });
 
       if (response.status === 429) {
-        // Rate limited — push embeds back to front of buffer and wait
-        const retryAfterHeader = response.headers.get('Retry-After');
-        const retryAfterSec = retryAfterHeader ? parseFloat(retryAfterHeader) : 60;
+        // Rate limited — read exact Retry-After from Discord
+        let retryAfterSec = 60; // default 60s
+        
+        // Sometimes Discord sends it in the JSON body
+        try {
+          const body = await response.json();
+          if (body.retry_after != null) retryAfterSec = parseFloat(body.retry_after);
+        } catch (e) {
+          const retryAfterHeader = response.headers.get('Retry-After');
+          if (retryAfterHeader) retryAfterSec = parseFloat(retryAfterHeader);
+        }
+
         buffer.unshift(...batch); // restore batch to front
         embedBuffer.set(webhookUrl, buffer);
 
+        // Block THIS url from flushing until the retry time
+        const nextRetryMs = now + (retryAfterSec * 1000);
+        urlNextRetryTime.set(webhookUrl, nextRetryMs);
+
         // Mark all pending DB rows for this URL with the retry timestamp
-        const nextRetry = new Date(Date.now() + retryAfterSec * 1000);
+        const nextRetryDate = new Date(nextRetryMs);
         await DiscordQueue.updateMany(
           { webhook_url: webhookUrl, status: 'pending' },
           {
-            $set: { next_retry_at: nextRetry },
+            $set: { next_retry_at: nextRetryDate },
             $inc: { retries: 1 },
           }
         );
@@ -216,11 +238,10 @@ async function flushQueue() {
 
         console.warn(
           `[Discord] ⚠️  Rate limited! Batch of ${batch.length} restored to buffer. ` +
-          `Retry after ${Math.ceil(retryAfterSec)}s (${nextRetry.toISOString()}).`
+          `Retry after ${Math.ceil(retryAfterSec)}s (${nextRetryDate.toISOString()}).`
         );
 
-        // Sleep for the full retry period before continuing with other URLs
-        await sleep(retryAfterSec * 1000);
+        // DO NOT SLEEP here. We just set urlNextRetryTime so it gets skipped next time.
         continue;
       }
 
