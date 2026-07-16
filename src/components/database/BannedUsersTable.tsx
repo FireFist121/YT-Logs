@@ -192,7 +192,12 @@ export default function BannedUsersTable() {
           const storedName = user.currentDisplayName ?? user.displayName;
           const storedPic = user.currentProfilePicUrl ?? user.profilePicUrl;
 
-          if (newName && newName.trim().toLowerCase() !== storedName.trim().toLowerCase()) {
+          // Normalize names before comparing: trim, collapse spaces, normalize unicode
+          // This prevents false positives from Live Chat API vs Channel API formatting differences
+          const normalizeName = (name: string) =>
+            name.trim().replace(/\s+/g, ' ').normalize('NFC').toLowerCase();
+
+          if (newName && normalizeName(newName) !== normalizeName(storedName)) {
             userUpdate.current_display_name = newName;
             userUpdate.has_name_change = true;
             logs.push({
