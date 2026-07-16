@@ -205,13 +205,21 @@ async function flushQueue() {
         // Rate limited — read exact Retry-After from Discord
         let retryAfterSec = 60; // default 60s
         
-        // Sometimes Discord sends it in the JSON body
+        // Always try to read headers first
+        const header1 = response.headers.get('x-ratelimit-reset-after');
+        const header2 = response.headers.get('Retry-After');
+        if (header1) retryAfterSec = parseFloat(header1);
+        else if (header2) retryAfterSec = parseFloat(header2);
+
+        // Try reading JSON body just in case it's more accurate
         try {
-          const body = await response.json();
-          if (body.retry_after != null) retryAfterSec = parseFloat(body.retry_after);
+          const bodyText = await response.text();
+          if (bodyText) {
+            const body = JSON.parse(bodyText);
+            if (body.retry_after != null) retryAfterSec = parseFloat(body.retry_after);
+          }
         } catch (e) {
-          const retryAfterHeader = response.headers.get('Retry-After');
-          if (retryAfterHeader) retryAfterSec = parseFloat(retryAfterHeader);
+          // ignore parsing error
         }
 
         buffer.unshift(...batch); // restore batch to front
