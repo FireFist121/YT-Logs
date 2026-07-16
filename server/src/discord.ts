@@ -1,7 +1,16 @@
 // Using native fetch API
 
-const DISCORD_TIMEOUT_WEBHOOK = process.env.DISCORD_TIMEOUT_WEBHOOK || '';
-const DISCORD_BAN_WEBHOOK = process.env.DISCORD_BAN_WEBHOOK || '';
+// Startup validation — log whether webhook URLs are configured
+if (process.env.DISCORD_TIMEOUT_WEBHOOK) {
+  console.log('[Discord] TIMEOUT webhook URL loaded ✓');
+} else {
+  console.warn('[Discord] WARNING: DISCORD_TIMEOUT_WEBHOOK is not set! Timeout events will NOT be sent to Discord.');
+}
+if (process.env.DISCORD_BAN_WEBHOOK) {
+  console.log('[Discord] BAN webhook URL loaded ✓');
+} else {
+  console.warn('[Discord] WARNING: DISCORD_BAN_WEBHOOK is not set! Ban events will NOT be sent to Discord.');
+}
 
 interface ModEventPayload {
   type: 'timeout' | 'ban';
@@ -49,12 +58,19 @@ export async function sendDiscordWebhook(event: ModEventPayload) {
   }
 
   try {
-    await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`Discord webhook failed [${response.status} ${response.statusText}]:`, errorBody);
+    } else {
+      console.log(`Discord webhook sent successfully for ${event.type}: ${event.targetDisplayName}`);
+    }
   } catch (err: any) {
-    console.error('Failed to send Discord webhook:', err.message);
+    console.error('Failed to send Discord webhook (network error):', err.message);
   }
 }
