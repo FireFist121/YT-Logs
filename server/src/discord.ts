@@ -35,6 +35,7 @@ const queues = new Map<string, QueueItem[]>();
 const processing = new Set<string>();
 
 const MAX_RETRIES = 5;
+const MIN_SEND_INTERVAL_MS = 1500; // min gap between sends to stay under Discord's rate limit
 
 function enqueue(item: QueueItem) {
   const key = item.webhookUrl;
@@ -61,11 +62,10 @@ async function processQueue(key: string) {
       });
 
       if (response.status === 429) {
-        // Rate limited — read Retry-After and wait
+        // Rate limited — read Retry-After and wait (cap at 30s to avoid long freezes)
         const retryAfterHeader = response.headers.get('Retry-After');
-        const retryAfterMs = retryAfterHeader
-          ? Math.ceil(parseFloat(retryAfterHeader) * 1000)
-          : 5000; // fallback: wait 5s
+        const retryAfterRaw = retryAfterHeader ? Math.ceil(parseFloat(retryAfterHeader) * 1000) : 5000;
+        const retryAfterMs = Math.min(retryAfterRaw, 30000); // never wait more than 30s
 
         console.warn(`[Discord] Rate limited (429) for "${item.label}". Retrying in ${retryAfterMs}ms... (attempt ${item.retries + 1}/${MAX_RETRIES})`);
 
@@ -87,6 +87,9 @@ async function processQueue(key: string) {
       }
 
       queue.shift(); // move to next item
+
+      // Minimum delay between sends to stay under Discord's rate limit
+      if (queue.length > 0) await sleep(MIN_SEND_INTERVAL_MS);
 
     } catch (err: any) {
       console.error(`[Discord] Network error for "${item.label}":`, err.message);
