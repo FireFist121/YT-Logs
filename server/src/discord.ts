@@ -3,6 +3,7 @@
 // Batching drastically reduces the number of webhook calls → no more rate limits.
 
 import { DiscordQueue } from './db';
+import { ProxyAgent } from 'undici';
 
 // ─── Startup validation ─────────────────────────────────────────────────────
 if (process.env.DISCORD_TIMEOUT_WEBHOOK) {
@@ -14,6 +15,13 @@ if (process.env.DISCORD_BAN_WEBHOOK) {
   console.log('[Discord] BAN webhook URL loaded ✓');
 } else {
   console.warn('[Discord] WARNING: DISCORD_BAN_WEBHOOK is not set!');
+}
+
+const PROXY_URL = process.env.DISCORD_PROXY || process.env.HTTP_PROXY;
+let proxyDispatcher: any = undefined;
+if (PROXY_URL) {
+  console.log(`[Discord] Proxy configured ✓`);
+  proxyDispatcher = new ProxyAgent(PROXY_URL);
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -195,11 +203,17 @@ async function flushQueue() {
     console.log(`[Discord] Sending batch of ${batch.length} embed(s) to ${webhookUrl.substring(0, 60)}...`);
 
     try {
-      const response = await fetch(webhookUrl, {
+      const fetchOptions: any = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ embeds: batch }),
-      });
+      };
+      
+      if (proxyDispatcher) {
+        fetchOptions.dispatcher = proxyDispatcher;
+      }
+
+      const response = await fetch(webhookUrl, fetchOptions);
 
       if (response.status === 429) {
         // Rate limited — read exact Retry-After from Discord
