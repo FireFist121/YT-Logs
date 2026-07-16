@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3001;
 import { startChannelWatcher } from './watcher';
 import { startMonitor, stopMonitor, getActiveMonitors } from './monitor';
 import { authRouter, loadRefreshTokenFromDB } from './auth';
+import { startDiscordQueueWorker } from './discord';
 
 app.use('/api/auth', authRouter);
 
@@ -138,8 +139,9 @@ app.use((req, res) => {
 
 // Start background processes
 connectDB().then(async () => {
-  await loadRefreshTokenFromDB(); // Load token from MongoDB (or env fallback)
+  await loadRefreshTokenFromDB();
   startChannelWatcher();
+  startDiscordQueueWorker(); // flush pending Discord notifications every 30s
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });

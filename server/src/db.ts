@@ -86,3 +86,15 @@ const appSettingsSchema = new mongoose.Schema({
 });
 
 export const AppSettings = mongoose.model('AppSettings', appSettingsSchema);
+
+const discordQueueSchema = new mongoose.Schema({
+  webhook_url: { type: String, required: true },
+  payload: { type: mongoose.Schema.Types.Mixed, required: true },
+  label: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+  created_at: { type: Date, default: Date.now },
+  next_retry_at: { type: Date, default: Date.now },
+  retries: { type: Number, default: 0 },
+});
+
+export const DiscordQueue = mongoose.model('DiscordQueue', discordQueueSchema);
