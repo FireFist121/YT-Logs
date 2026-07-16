@@ -1,9 +1,10 @@
-// Discord Webhook Sender — MongoDB-backed persistent queue
-// Events are NEVER lost: saved to DB first, sent when Discord allows it.
+// Discord Webhook Sender — Batched delivery with MongoDB-backed persistent queue
+// Events are NEVER lost: saved to DB first, then batched (up to 10 embeds per request).
+// Batching drastically reduces the number of webhook calls → no more rate limits.
 
 import { DiscordQueue } from './db';
 
-// Startup validation
+// ─── Startup validation ─────────────────────────────────────────────────────
 if (process.env.DISCORD_TIMEOUT_WEBHOOK) {
   console.log('[Discord] TIMEOUT webhook URL loaded ✓');
 } else {
@@ -15,6 +16,7 @@ if (process.env.DISCORD_BAN_WEBHOOK) {
   console.warn('[Discord] WARNING: DISCORD_BAN_WEBHOOK is not set!');
 }
 
+// ─── Types ──────────────────────────────────────────────────────────────────
 export interface ModEventPayload {
   type: 'timeout' | 'ban';
   targetChannelId: string;
@@ -26,133 +28,242 @@ export interface ModEventPayload {
   proof?: string[];
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
 const MAX_RETRIES = 10;
-const MIN_SEND_INTERVAL_MS = 2000; // 2s between sends — safely under Discord's 5 req/2s limit
+const MAX_EMBEDS_PER_BATCH = 10;   // Discord hard limit: 10 embeds per message
+const BATCH_WINDOW_MS = 10_000;    // Collect events for 10 seconds before flushing
+const FLUSH_INTERVAL_MS = 10_000;  // Worker polls every 10 seconds
+const MIN_SEND_INTERVAL_MS = 1_000; // Gap between consecutive batch requests (safety)
+
+// ─── In-memory cache (buffer) ─────────────────────────────────────────────
+// Structure: webhookUrl → array of embed objects waiting to be sent
+const embedBuffer = new Map<string, any[]>();
+
+// Track last-flush timestamp per URL to honour BATCH_WINDOW_MS
+const lastFlushTime = new Map<string, number>();
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/** Save the event to MongoDB first, then trigger the sender loop */
+/** Build a Discord embed object from a ModEventPayload */
+function buildEmbed(event: ModEventPayload): any {
+  const color = event.type === 'timeout' ? 16753920 : 16711680;
+  const title = event.type === 'timeout' ? 'User Timed Out' : 'User Banned';
+  const durationText = event.banDurationSeconds
+    ? `\n**Duration:** ${event.banDurationSeconds} seconds`
+    : '';
+
+  const embed: any = {
+    title,
+    color,
+    description:
+      `**User:** [${event.targetDisplayName}](https://youtube.com/channel/${event.targetChannelId})\n` +
+      `**Moderator:** ${event.moderatorDisplayName || 'Unknown'}${durationText}`,
+    thumbnail:
+      event.targetProfilePicUrl && event.targetProfilePicUrl.length > 0
+        ? { url: event.targetProfilePicUrl }
+        : undefined,
+    timestamp: event.timestamp,
+    footer: { text: 'Made By - FireFist' },
+  };
+
+  if (event.proof && event.proof.length > 0) {
+    let proofText = event.proof.map(msg => `• ${msg}`).join('\n');
+    if (proofText.length > 1024) proofText = proofText.substring(0, 1021) + '...';
+    embed.fields = [{ name: '📝 Recent Messages', value: proofText }];
+  }
+
+  return embed;
+}
+
+/**
+ * Queue a moderation event.
+ *
+ * Flow:
+ *  1. Build the embed from the payload.
+ *  2. Add the embed to the in-memory buffer for its webhook URL.
+ *  3. Persist a single "batch_pending" row to MongoDB so events survive crashes.
+ *     (The worker will read these back on startup if the buffer is empty.)
+ */
 export async function sendDiscordWebhook(event: ModEventPayload) {
-  const webhookUrl = event.type === 'timeout'
-    ? process.env.DISCORD_TIMEOUT_WEBHOOK
-    : process.env.DISCORD_BAN_WEBHOOK;
+  const webhookUrl =
+    event.type === 'timeout'
+      ? process.env.DISCORD_TIMEOUT_WEBHOOK
+      : process.env.DISCORD_BAN_WEBHOOK;
 
   if (!webhookUrl) {
     console.warn(`[Discord] No webhook URL for "${event.type}" — skipping.`);
     return;
   }
 
-  const color = event.type === 'timeout' ? 16753920 : 16711680;
-  const title = event.type === 'timeout' ? 'User Timed Out' : 'User Banned';
-  const durationText = event.banDurationSeconds ? `\n**Duration:** ${event.banDurationSeconds} seconds` : '';
-
-  const payload: any = {
-    embeds: [{
-      title,
-      color,
-      description: `**User:** [${event.targetDisplayName}](https://youtube.com/channel/${event.targetChannelId})\n**Moderator:** ${event.moderatorDisplayName || 'Unknown'}${durationText}`,
-      thumbnail: (event.targetProfilePicUrl && event.targetProfilePicUrl.length > 0)
-        ? { url: event.targetProfilePicUrl }
-        : undefined,
-      timestamp: event.timestamp,
-      footer: { text: 'Made By - FireFist' }
-    }]
-  };
-
-  if (event.proof && event.proof.length > 0) {
-    let proofText = event.proof.map(msg => `• ${msg}`).join('\n');
-    if (proofText.length > 1024) proofText = proofText.substring(0, 1021) + '...';
-    payload.embeds[0].fields = [{ name: '📝 Recent Messages', value: proofText }];
-  }
-
+  const embed = buildEmbed(event);
   const label = `${event.type} for ${event.targetDisplayName}`;
 
-  // Save to MongoDB — survives redeploys and bans
+  // 1️⃣ Add to in-memory buffer
+  if (!embedBuffer.has(webhookUrl)) {
+    embedBuffer.set(webhookUrl, []);
+  }
+  embedBuffer.get(webhookUrl)!.push(embed);
+  console.log(`[Discord] Buffered: ${label} (buffer size: ${embedBuffer.get(webhookUrl)!.length})`);
+
+  // 2️⃣ Persist to MongoDB for crash-safety (one row per individual event)
   try {
     await DiscordQueue.create({
       webhook_url: webhookUrl,
-      payload,
+      payload: { embeds: [embed] }, // stored individually; batching happens at send time
       label,
       status: 'pending',
       next_retry_at: new Date(),
     });
-    console.log(`[Discord] Queued: ${label}`);
   } catch (err: any) {
-    console.error('[Discord] Failed to save to queue:', err.message);
+    console.error('[Discord] Failed to persist to queue:', err.message);
   }
 }
 
-/** Background loop: runs every 30s, picks up pending items and sends them */
+// ─── Worker ──────────────────────────────────────────────────────────────────
+
+/** Background loop: checks every FLUSH_INTERVAL_MS and flushes ready batches */
 export async function startDiscordQueueWorker() {
-  console.log('[Discord] Queue worker started.');
+  console.log('[Discord] Batched queue worker started.');
+
+  // On startup, reload any surviving "pending" items from MongoDB into the buffer.
+  // This handles server restarts where the in-memory buffer was lost.
+  await rehydrateBufferFromDB();
+
   while (true) {
-    await sleep(30000); // check every 30 seconds
+    await sleep(FLUSH_INTERVAL_MS);
     await flushQueue();
   }
 }
 
+/**
+ * On startup: pull all pending MongoDB rows back into the in-memory buffer
+ * so they are included in the next flush cycle.
+ */
+async function rehydrateBufferFromDB() {
+  try {
+    const pending = await DiscordQueue.find({ status: 'pending' }).sort({ created_at: 1 });
+    if (pending.length === 0) return;
+
+    for (const item of pending) {
+      const url = item.webhook_url as string;
+      const embeds: any[] = (item.payload as any)?.embeds ?? [];
+      if (!embedBuffer.has(url)) embedBuffer.set(url, []);
+      embedBuffer.get(url)!.push(...embeds);
+    }
+    console.log(`[Discord] Rehydrated ${pending.length} pending item(s) from MongoDB into buffer.`);
+  } catch (err: any) {
+    console.error('[Discord] Failed to rehydrate buffer from DB:', err.message);
+  }
+}
+
+/**
+ * Core flush function.
+ *
+ * For each webhook URL that has buffered embeds:
+ *  - Take up to MAX_EMBEDS_PER_BATCH embeds.
+ *  - Send them in a single Discord webhook POST (batched).
+ *  - On success: mark corresponding DB rows as 'sent'.
+ *  - On 429: pause and retry at the time Discord specifies.
+ *  - On other errors: mark rows for retry after 60 s.
+ */
 async function flushQueue() {
-  const now = new Date();
+  const now = Date.now();
 
-  // Fetch all pending items ready to send
-  const items = await DiscordQueue.find({
-    status: 'pending',
-    next_retry_at: { $lte: now },
-  }).sort({ created_at: 1 }).limit(10);
+  for (const [webhookUrl, buffer] of embedBuffer.entries()) {
+    if (buffer.length === 0) continue;
 
-  if (items.length === 0) return;
+    // Respect the batch window — don't flush if last flush was too recent,
+    // UNLESS the buffer is already full (10 embeds).
+    const timeSinceLast = now - (lastFlushTime.get(webhookUrl) ?? 0);
+    if (buffer.length < MAX_EMBEDS_PER_BATCH && timeSinceLast < BATCH_WINDOW_MS) {
+      continue; // Still collecting — wait for more events or for window to expire
+    }
 
-  console.log(`[Discord] Flushing ${items.length} queued notification(s)...`);
+    // Take a batch of up to 10 embeds
+    const batch = buffer.splice(0, MAX_EMBEDS_PER_BATCH);
+    console.log(`[Discord] Sending batch of ${batch.length} embed(s) to ${webhookUrl.substring(0, 60)}...`);
 
-  for (const item of items) {
     try {
-      const response = await fetch(item.webhook_url, {
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item.payload),
+        body: JSON.stringify({ embeds: batch }),
       });
 
       if (response.status === 429) {
-        // Rate limited — read exact Retry-After from Discord
+        // Rate limited — push embeds back to front of buffer and wait
         const retryAfterHeader = response.headers.get('Retry-After');
         const retryAfterSec = retryAfterHeader ? parseFloat(retryAfterHeader) : 60;
-        // Persist the next retry time in MongoDB — survives redeploys
+        buffer.unshift(...batch); // restore batch to front
+        embedBuffer.set(webhookUrl, buffer);
+
+        // Mark all pending DB rows for this URL with the retry timestamp
         const nextRetry = new Date(Date.now() + retryAfterSec * 1000);
-        await DiscordQueue.findByIdAndUpdate(item._id, {
-          next_retry_at: nextRetry,
-          retries: item.retries + 1,
-          status: item.retries + 1 >= MAX_RETRIES ? 'failed' : 'pending',
-        });
-        console.warn(`[Discord] Rate limited for "${item.label}". Next retry at ${nextRetry.toISOString()} (${Math.ceil(retryAfterSec)}s). Discord said: ${retryAfterSec}s`);
-        // Stop flushing — all items share the same IP, wait for ban to lift
-        break;
+        await DiscordQueue.updateMany(
+          { webhook_url: webhookUrl, status: 'pending' },
+          {
+            $set: { next_retry_at: nextRetry },
+            $inc: { retries: 1 },
+          }
+        );
+        // If any item has exceeded MAX_RETRIES, mark as failed
+        await DiscordQueue.updateMany(
+          { webhook_url: webhookUrl, status: 'pending', retries: { $gte: MAX_RETRIES } },
+          { $set: { status: 'failed' } }
+        );
+
+        console.warn(
+          `[Discord] ⚠️  Rate limited! Batch of ${batch.length} restored to buffer. ` +
+          `Retry after ${Math.ceil(retryAfterSec)}s (${nextRetry.toISOString()}).`
+        );
+
+        // Sleep for the full retry period before continuing with other URLs
+        await sleep(retryAfterSec * 1000);
+        continue;
       }
 
       if (!response.ok) {
         const body = await response.text();
-        console.error(`[Discord] Failed [${response.status}] for "${item.label}":`, body);
-        await DiscordQueue.findByIdAndUpdate(item._id, {
-          retries: item.retries + 1,
-          status: item.retries + 1 >= MAX_RETRIES ? 'failed' : 'pending',
-          next_retry_at: new Date(Date.now() + 60000), // retry in 1 min
-        });
-      } else {
-        // Success!
-        await DiscordQueue.findByIdAndUpdate(item._id, { status: 'sent' });
-        console.log(`[Discord] ✓ Sent: ${item.label}`);
-      }
+        console.error(`[Discord] ❌ Batch failed [${response.status}]:`, body);
+        // Restore failed batch to front of buffer for retry
+        buffer.unshift(...batch);
+        embedBuffer.set(webhookUrl, buffer);
 
+        await DiscordQueue.updateMany(
+          { webhook_url: webhookUrl, status: 'pending' },
+          {
+            $set: { next_retry_at: new Date(Date.now() + 60_000) },
+            $inc: { retries: 1 },
+          }
+        );
+        await DiscordQueue.updateMany(
+          { webhook_url: webhookUrl, status: 'pending', retries: { $gte: MAX_RETRIES } },
+          { $set: { status: 'failed' } }
+        );
+      } else {
+        // ✅ Success — mark DB rows as sent
+        console.log(`[Discord] ✅ Batch of ${batch.length} sent successfully.`);
+        lastFlushTime.set(webhookUrl, Date.now());
+
+        // Mark the oldest N pending rows for this URL as sent
+        const pendingRows = await DiscordQueue.find({ webhook_url: webhookUrl, status: 'pending' })
+          .sort({ created_at: 1 })
+          .limit(batch.length);
+        const ids = pendingRows.map(r => r._id);
+        if (ids.length > 0) {
+          await DiscordQueue.updateMany({ _id: { $in: ids } }, { $set: { status: 'sent' } });
+        }
+      }
     } catch (err: any) {
-      console.error(`[Discord] Network error for "${item.label}":`, err.message);
-      await DiscordQueue.findByIdAndUpdate(item._id, {
-        retries: item.retries + 1,
-        next_retry_at: new Date(Date.now() + 30000),
-      });
+      console.error(`[Discord] Network error sending batch:`, err.message);
+      // Restore to buffer for retry
+      buffer.unshift(...batch);
+      embedBuffer.set(webhookUrl, buffer);
     }
 
-    // Minimum spacing between sends
+    // Small gap between requests to different webhook URLs (safety margin)
     await sleep(MIN_SEND_INTERVAL_MS);
   }
 }

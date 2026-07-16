@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm install --prefix server && npm run build --prefix server && tsc -b && vite build",
+    "build": "npm install && npm install --prefix server && node server/node_modules/typescript/lib/tsc.js -p server/tsconfig.json && node node_modules/typescript/lib/tsc.js -b tsconfig.json && vite build",
     "start": "node server/dist/index.js",
     "lint": "oxlint",
     "preview": "vite preview"
