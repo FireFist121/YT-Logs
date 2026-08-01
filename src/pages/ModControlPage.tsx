@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { Play, Square, RefreshCw, Radio, Tv, ShieldCheck, ExternalLink, AlertCircle, Sparkles } from 'lucide-react';
+import { Play, Square, RefreshCw, Radio, Tv, ShieldCheck, ExternalLink, AlertCircle, Sparkles, Tv2, Lock } from 'lucide-react';
 
 interface WatchedChannel {
   _id: string;
@@ -20,7 +20,11 @@ interface ActiveMonitor {
   videoId?: string;
 }
 
-export default function ModControlPage() {
+interface ModControlPageProps {
+  standalone?: boolean;
+}
+
+export default function ModControlPage({ standalone = false }: ModControlPageProps) {
   const [streamUrl, setStreamUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -110,7 +114,35 @@ export default function ModControlPage() {
   const activeLiveChannels = watchedChannels.filter(c => c.is_live);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#050505] p-6 text-white space-y-6">
+    <div className={`min-h-screen bg-[#050505] text-white flex flex-col ${standalone ? 'w-screen overflow-x-hidden' : 'h-full overflow-y-auto p-6 space-y-6'}`}>
+      {/* Standalone Top Bar Header */}
+      {standalone && (
+        <header className="h-16 border-b border-neutral-800 bg-[#0a0a0a]/90 backdrop-blur-xl px-6 flex items-center justify-between sticky top-0 z-30 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-[0_0_12px_rgba(255,0,0,0.4)]">
+              <Tv2 className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-white tracking-wide">YT Mod Monitor</span>
+              <span className="ml-2 text-[10px] px-2 py-0.5 font-semibold text-red-400 bg-red-950/60 border border-red-800/60 rounded-full uppercase">
+                Mod Control
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <a
+              href="/"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-xl transition-all shadow-sm"
+            >
+              <Lock className="w-3.5 h-3.5 text-neutral-400" />
+              Admin Login
+            </a>
+          </div>
+        </header>
+      )}
+
+      <div className={standalone ? 'p-6 space-y-6 flex-1 max-w-7xl mx-auto w-full' : ''}>
       {/* Header Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950/40 via-purple-950/20 to-black p-6 border border-red-900/30 shadow-2xl">
         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
@@ -388,6 +420,7 @@ export default function ModControlPage() {
             </table>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -76,12 +76,20 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsPage from './pages/TermsPage';
 
 export default function App() {
-  // Simple check for privacy policy and terms route before any auth logic
+  // Standalone public routes before any auth logic
   if (window.location.pathname === '/privacy') {
     return <PrivacyPolicyPage />;
   }
   if (window.location.pathname === '/terms') {
     return <TermsPage />;
+  }
+  if (window.location.pathname === '/mod-control' || window.location.pathname === '/control') {
+    return (
+      <>
+        <ModControlPage standalone={true} />
+        <Toaster position="bottom-right" />
+      </>
+    );
   }
 
   const [isUnlocked, setIsUnlocked] = useState(() => {
