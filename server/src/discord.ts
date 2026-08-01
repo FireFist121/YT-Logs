@@ -3,7 +3,8 @@
 // Batching drastically reduces the number of webhook calls → no more rate limits.
 
 import { DiscordQueue } from './db';
-import { HttpsProxyAgent } from 'https-proxy-agent';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { HttpsProxyAgent } = require('https-proxy-agent') as typeof import('https-proxy-agent');
 import axios from 'axios';
 
 // ─── Startup validation ─────────────────────────────────────────────────────
