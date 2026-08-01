@@ -11,12 +11,18 @@ import TopBar from './components/layout/TopBar';
 import MonitorPage from './pages/MonitorPage';
 import DatabasePage from './pages/DatabasePage';
 import WatchListPage from './pages/WatchListPage';
+import ModControlPage from './pages/ModControlPage';
 
-type Page = 'monitor' | 'database' | 'watchlist';
+type Page = 'monitor' | 'database' | 'watchlist' | 'mod-control';
 
 function AppContent() {
   const { isAuthenticated, accessToken, logout } = useAuthStore();
-  const [currentPage, setCurrentPage] = useState<Page>('monitor');
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
+    if (window.location.pathname === '/mod-control' || window.location.pathname === '/control') {
+      return 'mod-control';
+    }
+    return 'monitor';
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Auto-refresh the access token before it expires
@@ -56,6 +62,7 @@ function AppContent() {
         <TopBar onLogout={handleLogout} activePage={currentPage} />
         <main className="flex-1 overflow-hidden min-h-0">
           {currentPage === 'monitor' && <MonitorPage />}
+          {currentPage === 'mod-control' && <ModControlPage />}
           {currentPage === 'watchlist' && <WatchListPage />}
           {currentPage === 'database' && <DatabasePage />}
         </main>

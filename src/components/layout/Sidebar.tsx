@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Database, Tv2, ChevronLeft, ChevronRight, Bell } from 'lucide-react';
+import { Activity, Database, Tv2, ChevronLeft, ChevronRight, Bell, Radio } from 'lucide-react';
 import { fetchWatchedChannels } from '../../lib/db';
 
 interface SidebarProps {
-  activePage: 'monitor' | 'database' | 'watchlist';
-  onNavigate: (page: 'monitor' | 'database' | 'watchlist') => void;
+  activePage: 'monitor' | 'database' | 'watchlist' | 'mod-control';
+  onNavigate: (page: 'monitor' | 'database' | 'watchlist' | 'mod-control') => void;
   collapsed: boolean;
   onToggle: () => void;
 }
 
 const navItems = [
   { id: 'monitor' as const, label: 'Live Monitor', icon: Activity },
+  { id: 'mod-control' as const, label: 'Mod Control', icon: Radio },
   { id: 'watchlist' as const, label: 'Watch List', icon: Bell },
   { id: 'database' as const, label: 'Banned Users', icon: Database },
 ];

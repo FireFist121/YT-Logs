@@ -15,7 +15,8 @@ import { startChannelWatcher } from './watcher';
 import { startMonitor, stopMonitor, getActiveMonitors } from './monitor';
 import { authRouter, loadRefreshTokenFromDB } from './auth';
 import { startDiscordQueueWorker } from './discord';
-import { startDiscordBot } from './discordBot';
+import { stopMonitorByChannelId } from './monitor';
+import { youtube } from './youtube';
 
 app.use('/api/auth', authRouter);
 
@@ -39,6 +40,106 @@ app.post('/api/monitor/stop', (req, res) => {
   if (!liveChatId) return res.status(400).json({ error: 'Missing params' });
   stopMonitor(liveChatId);
   res.json({ success: true });
+});
+
+// Endpoint for Mod Control Page: Start stream monitor by YouTube URL or Video ID
+app.post('/api/public/start-monitor-url', async (req, res) => {
+  const { url: input } = req.body;
+  if (!input || typeof input !== 'string') {
+    return res.status(400).json({ error: 'Please provide a valid YouTube Stream URL or Video ID.' });
+  }
+
+  let videoId = input.trim();
+  try {
+    if (videoId.includes('youtube.com') || videoId.includes('youtu.be')) {
+      const parsedUrl = new URL(videoId);
+      videoId = parsedUrl.searchParams.get('v') || parsedUrl.pathname.split('/').pop() || videoId;
+    }
+  } catch (e) {
+    // Treat as direct video ID
+  }
+
+  try {
+    const videoRes = await youtube.videos.list({
+      part: ['snippet', 'liveStreamingDetails'],
+      id: [videoId],
+    });
+
+    const video = videoRes.data.items?.[0];
+    if (!video) {
+      return res.status(404).json({ error: `Could not find YouTube video with ID: ${videoId}` });
+    }
+
+    const chatId = video.liveStreamingDetails?.activeLiveChatId;
+    const channelId = video.snippet?.channelId;
+
+    if (!chatId || !channelId) {
+      return res.status(400).json({ error: 'This video is not currently live or active live chat is disabled.' });
+    }
+
+    let profilePicUrl = '';
+    try {
+      const channelRes = await youtube.channels.list({
+        part: ['snippet'],
+        id: [channelId],
+      });
+      profilePicUrl = channelRes.data.items?.[0]?.snippet?.thumbnails?.default?.url || '';
+    } catch (e) {
+      // Non-fatal
+    }
+
+    const channelDoc = await WatchedChannel.findOneAndUpdate(
+      { channel_id: channelId },
+      {
+        $set: {
+          is_live: true,
+          current_video_id: videoId,
+          current_live_chat_id: chatId,
+          display_name: video.snippet?.channelTitle || 'Unknown Channel',
+          profile_pic_url: profilePicUrl || '',
+          last_checked: new Date(),
+        },
+        $setOnInsert: {
+          auto_monitor: false,
+          added_at: new Date(),
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    startMonitor(channelId, chatId, videoId);
+    res.json({
+      success: true,
+      message: `Successfully started monitoring ${video.snippet?.channelTitle}`,
+      channel: channelDoc,
+      videoId,
+      chatId,
+    });
+  } catch (err: any) {
+    console.error('Error starting monitor by URL:', err);
+    res.status(500).json({ error: err.message || 'Failed to start stream monitor.' });
+  }
+});
+
+// Endpoint for Mod Control Page: Stop stream monitor by Channel ID
+app.post('/api/public/stop-monitor-channel', async (req, res) => {
+  const { channelId } = req.body;
+  if (!channelId) return res.status(400).json({ error: 'Missing channelId' });
+
+  try {
+    const channel = await WatchedChannel.findOne({ channel_id: channelId });
+    if (channel) {
+      channel.is_live = false;
+      await channel.save();
+      if (channel.current_live_chat_id) {
+        stopMonitor(channel.current_live_chat_id);
+      }
+    }
+    stopMonitorByChannelId(channelId);
+    res.json({ success: true, message: 'Monitoring stopped.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // REST API
@@ -142,7 +243,6 @@ connectDB().then(async () => {
   await loadRefreshTokenFromDB();
   startChannelWatcher();
   startDiscordQueueWorker(); // flush pending Discord notifications every 30s
-  startDiscordBot(); // initialize and login Discord Bot for the control panel
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });

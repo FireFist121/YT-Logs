@@ -7,7 +7,7 @@ import SettingsModal from './SettingsModal';
 
 interface TopBarProps {
   onLogout: () => void;
-  activePage: 'monitor' | 'database' | 'watchlist';
+  activePage: 'monitor' | 'database' | 'watchlist' | 'mod-control';
 }
 
 export default function TopBar({ onLogout, activePage }: TopBarProps) {
@@ -45,7 +45,13 @@ export default function TopBar({ onLogout, activePage }: TopBarProps) {
       {/* Page title */}
       <div className="flex-1">
         <h1 className="text-white text-sm font-semibold">
-          {activePage === 'monitor' ? 'Live Mod Monitor' : activePage === 'watchlist' ? 'Channel Watch List' : 'Banned Users Database'}
+          {activePage === 'monitor'
+            ? 'Live Mod Monitor'
+            : activePage === 'mod-control'
+            ? 'Mod Stream Control Panel'
+            : activePage === 'watchlist'
+            ? 'Channel Watch List'
+            : 'Banned Users Database'}
         </h1>
       </div>
 
