@@ -42,6 +42,9 @@ export function startDiscordBot() {
         return;
       }
 
+      // Acknowledge immediately — Discord requires a response within 3 seconds
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
       const embed = new EmbedBuilder()
         .setTitle('🛡️ YouTube Log Bot Control Panel')
         .setDescription('Use the buttons below to manually start, stop, or check the status of the YouTube monitoring system.')
@@ -79,9 +82,10 @@ export function startDiscordBot() {
         components: [row]
       });
 
-      await interaction.reply({ content: '✅ Control panel created successfully!', flags: [MessageFlags.Ephemeral] });
+      await interaction.editReply({ content: '✅ Control panel created successfully!' });
       return;
     }
+
 
     if (!interaction.isButton()) return;
 

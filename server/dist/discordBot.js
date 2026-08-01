@@ -38,6 +38,8 @@ function startDiscordBot() {
                 await interaction.reply({ content: 'You do not have permission to set up the control panel.', flags: [discord_js_1.MessageFlags.Ephemeral] });
                 return;
             }
+            // Acknowledge immediately — Discord requires a response within 3 seconds
+            await interaction.deferReply({ flags: [discord_js_1.MessageFlags.Ephemeral] });
             const embed = new discord_js_1.EmbedBuilder()
                 .setTitle('🛡️ YouTube Log Bot Control Panel')
                 .setDescription('Use the buttons below to manually start, stop, or check the status of the YouTube monitoring system.')
@@ -64,7 +66,7 @@ function startDiscordBot() {
                 embeds: [embed],
                 components: [row]
             });
-            await interaction.reply({ content: '✅ Control panel created successfully!', flags: [discord_js_1.MessageFlags.Ephemeral] });
+            await interaction.editReply({ content: '✅ Control panel created successfully!' });
             return;
         }
         if (!interaction.isButton())
