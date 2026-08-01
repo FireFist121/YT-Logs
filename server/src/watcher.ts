@@ -50,7 +50,7 @@ async function checkAll() {
   }
 }
 
-async function checkChannelLiveStatus(channelId: string) {
+export async function checkChannelLiveStatus(channelId: string) {
   // 1. FAST INSTANT CHECK FOR AUTHENTICATED USER'S OWN STREAM
   try {
     const res = await youtube.liveBroadcasts.list({

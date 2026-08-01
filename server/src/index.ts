@@ -1,9 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { connectDB, BannedUser, ModEvent, WatchedChannel, ChangeLog } from './db';
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -15,6 +15,7 @@ import { startChannelWatcher } from './watcher';
 import { startMonitor, stopMonitor, getActiveMonitors } from './monitor';
 import { authRouter, loadRefreshTokenFromDB } from './auth';
 import { startDiscordQueueWorker } from './discord';
+import { startDiscordBot } from './discordBot';
 
 app.use('/api/auth', authRouter);
 
@@ -129,7 +130,6 @@ app.delete('/api/clear-database', async (req, res) => {
   res.json({ success: true });
 });
 
-import path from 'path';
 const clientBuildPath = path.join(__dirname, '../../dist');
 app.use(express.static(clientBuildPath));
 
@@ -142,6 +142,7 @@ connectDB().then(async () => {
   await loadRefreshTokenFromDB();
   startChannelWatcher();
   startDiscordQueueWorker(); // flush pending Discord notifications every 30s
+  startDiscordBot(); // initialize and login Discord Bot for the control panel
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
