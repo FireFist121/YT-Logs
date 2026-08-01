@@ -6,6 +6,11 @@ import { youtube } from './youtube';
 let client: Client | null = null;
 
 export function startDiscordBot() {
+  if (client) {
+    console.log('[Discord Bot] Client already initialized.');
+    return;
+  }
+
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log('[Discord Bot] No DISCORD_BOT_TOKEN found. Bot control panel disabled.');
     return;
@@ -48,12 +53,12 @@ export function startDiscordBot() {
   client.on('interactionCreate', async (interaction) => {
     if (interaction.isCommand() && interaction.commandName === 'setup-panel') {
       if (!interaction.memberPermissions?.has('Administrator') && !interaction.memberPermissions?.has('ManageGuild')) {
-        await interaction.reply({ content: 'You do not have permission to set up the control panel.', flags: [MessageFlags.Ephemeral] });
+        await interaction.reply({ content: 'You do not have permission to set up the control panel.', flags: [MessageFlags.Ephemeral] }).catch(() => {});
         return;
       }
 
       // Acknowledge immediately — Discord requires a response within 3 seconds
-      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
 
       const embed = new EmbedBuilder()
         .setTitle('🛡️ YouTube Log Bot Control Panel')
@@ -92,7 +97,7 @@ export function startDiscordBot() {
         components: [row]
       });
 
-      await interaction.editReply({ content: '✅ Control panel created successfully!' });
+      await interaction.editReply({ content: '✅ Control panel created successfully!' }).catch(() => {});
       return;
     }
 
@@ -101,7 +106,7 @@ export function startDiscordBot() {
 
     // Check permissions (ManageMessages or Admin)
     if (!interaction.memberPermissions?.has('ManageMessages') && !interaction.memberPermissions?.has('Administrator')) {
-      await interaction.reply({ content: 'You do not have permission to use this panel.', flags: [MessageFlags.Ephemeral] });
+      await interaction.reply({ content: 'You do not have permission to use this panel.', flags: [MessageFlags.Ephemeral] }).catch(() => {});
       return;
     }
 
@@ -123,9 +128,11 @@ export function startDiscordBot() {
 
         await interaction.showModal(modal);
       } catch (err: any) {
-        console.error('[Discord Bot] bot_on modal error:', err);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: `❌ Failed to open form: ${err.message}`, flags: [MessageFlags.Ephemeral] });
+        console.error('[Discord Bot] bot_on modal error:', err.message || err);
+        // If code is 10062 (Unknown interaction) or 40060 (Already acknowledged), token is expired/invalid.
+        // Do not attempt interaction.reply as it will fail with 10062 again.
+        if (err?.code !== 10062 && err?.code !== 40060 && !interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: `❌ Failed to open form: ${err.message}`, flags: [MessageFlags.Ephemeral] }).catch(() => {});
         }
       }
       return;
