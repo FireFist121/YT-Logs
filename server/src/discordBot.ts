@@ -203,6 +203,8 @@ export function startDiscordBot() {
 
         // Update live stream info but DO NOT touch auto_monitor — 
         // whatever the website has set should stay as-is.
+        // Set last_checked to now so the background watcher skips re-checking
+        // this channel immediately (it won't overwrite is_live for 15 min).
         await WatchedChannel.findOneAndUpdate(
           { channel_id: channelId },
           { 
@@ -212,6 +214,7 @@ export function startDiscordBot() {
               current_live_chat_id: chatId,
               display_name: video.snippet?.channelTitle || 'Unknown Channel',
               profile_pic_url: profilePicUrl || '',
+              last_checked: new Date(),
             },
             $setOnInsert: {
               // Only set these defaults when creating a brand-new document
