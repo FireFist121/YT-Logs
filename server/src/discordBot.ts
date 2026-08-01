@@ -189,8 +189,21 @@ export function startDiscordBot() {
           return;
         }
 
+        // Fetch channel thumbnail for required profile_pic_url field
+        let profilePicUrl = '';
+        try {
+          const channelRes = await youtube.channels.list({
+            part: ['snippet'],
+            id: [channelId],
+          });
+          profilePicUrl = channelRes.data.items?.[0]?.snippet?.thumbnails?.default?.url || '';
+        } catch (e) {
+          // Non-fatal, continue without pic
+        }
+
         // Update live stream info but DO NOT touch auto_monitor — 
         // whatever the website has set should stay as-is.
+        // Use $setOnInsert for required fields so they only apply when creating a new record.
         await WatchedChannel.findOneAndUpdate(
           { channel_id: channelId },
           { 
@@ -198,7 +211,14 @@ export function startDiscordBot() {
               is_live: true,
               current_video_id: videoId,
               current_live_chat_id: chatId,
-              display_name: video.snippet?.channelTitle || 'Unknown Channel'
+              display_name: video.snippet?.channelTitle || 'Unknown Channel',
+              ...(profilePicUrl && { profile_pic_url: profilePicUrl }),
+            },
+            $setOnInsert: {
+              // Only set these if this is a brand-new document (not in watchlist yet)
+              profile_pic_url: profilePicUrl || '',
+              auto_monitor: false,
+              added_at: new Date(),
             }
           },
           { upsert: true }
