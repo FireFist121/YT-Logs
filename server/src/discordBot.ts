@@ -267,7 +267,24 @@ export function startDiscordBot() {
     }
   });
 
-  client.login(process.env.DISCORD_BOT_TOKEN).catch(err => {
-    console.error('[Discord Bot] Failed to login:', err.message);
-  });
+  // HTTP_PROXY / HTTPS_PROXY env vars break discord.js's WebSocket gateway connection.
+  // The proxy is only needed for axios webhook calls (handled per-request), not here.
+  const savedHttpProxy = process.env.HTTP_PROXY;
+  const savedHttpsProxy = process.env.HTTPS_PROXY;
+  delete process.env.HTTP_PROXY;
+  delete process.env.HTTPS_PROXY;
+
+  console.log('[Discord Bot] Attempting to connect to Discord gateway...');
+  client.login(process.env.DISCORD_BOT_TOKEN)
+    .then(() => {
+      console.log('[Discord Bot] Login call succeeded — waiting for clientReady event...');
+      // Restore proxy after login so webhook calls still work
+      if (savedHttpProxy) process.env.HTTP_PROXY = savedHttpProxy;
+      if (savedHttpsProxy) process.env.HTTPS_PROXY = savedHttpsProxy;
+    })
+    .catch(err => {
+      console.error('[Discord Bot] Failed to login:', err.message);
+      if (savedHttpProxy) process.env.HTTP_PROXY = savedHttpProxy;
+      if (savedHttpsProxy) process.env.HTTPS_PROXY = savedHttpsProxy;
+    });
 }
