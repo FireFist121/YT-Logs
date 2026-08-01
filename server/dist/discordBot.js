@@ -16,21 +16,29 @@ function startDiscordBot() {
             discord_js_1.GatewayIntentBits.Guilds,
         ],
     });
-    client.once('ready', async () => {
-        console.log(`[Discord Bot] Logged in as ${client?.user?.tag}! Control panel ready.`);
-        // Register the slash command globally (might take up to an hour to propagate in all servers, 
-        // but usually instant for the bot's home server if refreshed)
+    // clientReady is the correct event in discord.js v14+ (replaces the deprecated 'ready')
+    client.once('clientReady', async (readyClient) => {
+        console.log(`[Discord Bot] Logged in as ${readyClient.user.tag}! Control panel ready.`);
         try {
-            await client?.application?.commands.create({
+            await readyClient.application.commands.create({
                 name: 'setup-panel',
                 description: 'Creates the YouTube Log Bot Control Panel in this channel.',
-                defaultMemberPermissions: '0', // Requires Administrator or specific overrides
+                defaultMemberPermissions: '0',
             });
             console.log('[Discord Bot] Registered /setup-panel slash command.');
         }
         catch (err) {
             console.error('[Discord Bot] Failed to register slash command:', err);
         }
+    });
+    client.on('error', (err) => {
+        console.error('[Discord Bot] Client error:', err.message);
+    });
+    client.on('warn', (msg) => {
+        console.warn('[Discord Bot] Warning:', msg);
+    });
+    client.on('disconnect', () => {
+        console.warn('[Discord Bot] Disconnected from gateway. discord.js will auto-reconnect.');
     });
     client.on('interactionCreate', async (interaction) => {
         if (interaction.isCommand() && interaction.commandName === 'setup-panel') {
