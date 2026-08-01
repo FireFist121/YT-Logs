@@ -203,7 +203,6 @@ export function startDiscordBot() {
 
         // Update live stream info but DO NOT touch auto_monitor — 
         // whatever the website has set should stay as-is.
-        // Use $setOnInsert for required fields so they only apply when creating a new record.
         await WatchedChannel.findOneAndUpdate(
           { channel_id: channelId },
           { 
@@ -212,11 +211,10 @@ export function startDiscordBot() {
               current_video_id: videoId,
               current_live_chat_id: chatId,
               display_name: video.snippet?.channelTitle || 'Unknown Channel',
-              ...(profilePicUrl && { profile_pic_url: profilePicUrl }),
+              profile_pic_url: profilePicUrl || '',
             },
             $setOnInsert: {
-              // Only set these if this is a brand-new document (not in watchlist yet)
-              profile_pic_url: profilePicUrl || '',
+              // Only set these defaults when creating a brand-new document
               auto_monitor: false,
               added_at: new Date(),
             }
