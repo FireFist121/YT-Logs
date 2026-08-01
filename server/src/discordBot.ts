@@ -91,8 +91,8 @@ export function startDiscordBot() {
       return;
     }
 
-    try {
-      if (interaction.customId === 'bot_on') {
+    if (interaction.customId === 'bot_on') {
+      try {
         const modal = new ModalBuilder()
           .setCustomId('modal_start_monitor')
           .setTitle('Start Monitoring');
@@ -108,10 +108,17 @@ export function startDiscordBot() {
         modal.addComponents(firstActionRow);
 
         await interaction.showModal(modal);
-        return;
-      } 
-      
-      else if (interaction.customId === 'bot_off') {
+      } catch (err: any) {
+        console.error('[Discord Bot] bot_on modal error:', err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: `❌ Failed to open form: ${err.message}`, flags: [MessageFlags.Ephemeral] });
+        }
+      }
+      return;
+    }
+
+    if (interaction.customId === 'bot_off') {
+      try {
         await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
         const channels = await WatchedChannel.find({});
@@ -122,11 +129,21 @@ export function startDiscordBot() {
         }
 
         await interaction.editReply(`🔴 Bot turned **OFF** for all channels. Monitoring has been stopped.`);
+      } catch (err: any) {
+        console.error('[Discord Bot] bot_off error:', err);
+        if (interaction.deferred) {
+          await interaction.editReply(`❌ An error occurred: ${err.message}`);
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: `❌ An error occurred: ${err.message}`, flags: [MessageFlags.Ephemeral] });
+        }
       }
+      return;
+    }
 
-      else if (interaction.customId === 'bot_status') {
+    if (interaction.customId === 'bot_status') {
+      try {
         await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-        
+
         const active = getActiveMonitors();
         const channels = await WatchedChannel.find({});
         const autoMonitoredCount = channels.filter(c => c.auto_monitor).length;
@@ -141,14 +158,15 @@ export function startDiscordBot() {
           );
 
         await interaction.editReply({ embeds: [embed] });
+      } catch (err: any) {
+        console.error('[Discord Bot] bot_status error:', err);
+        if (interaction.deferred) {
+          await interaction.editReply(`❌ An error occurred: ${err.message}`);
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: `❌ An error occurred: ${err.message}`, flags: [MessageFlags.Ephemeral] });
+        }
       }
-    } catch (err: any) {
-      console.error('[Discord Bot] Interaction error:', err);
-      if (interaction.deferred) {
-        await interaction.editReply(`❌ An error occurred: ${err.message}`);
-      } else {
-        await interaction.reply({ content: `❌ An error occurred: ${err.message}`, flags: [MessageFlags.Ephemeral] });
-      }
+      return;
     }
   });
 
