@@ -267,24 +267,36 @@ export function startDiscordBot() {
     }
   });
 
-  // HTTP_PROXY / HTTPS_PROXY env vars break discord.js's WebSocket gateway connection.
-  // The proxy is only needed for axios webhook calls (handled per-request), not here.
-  const savedHttpProxy = process.env.HTTP_PROXY;
-  const savedHttpsProxy = process.env.HTTPS_PROXY;
+  // Log proxy environment for diagnosis
+  console.log('[Discord Bot] Proxy env — HTTP_PROXY:', process.env.HTTP_PROXY || 'not set');
+  console.log('[Discord Bot] Proxy env — HTTPS_PROXY:', process.env.HTTPS_PROXY || 'not set');
+  console.log('[Discord Bot] Proxy env — DISCORD_PROXY:', process.env.DISCORD_PROXY || 'not set');
+
+  // Clear any proxy env vars — undici (used by discord.js) picks these up automatically
+  // and proxies do NOT support WebSocket upgrades, causing a silent hang.
   delete process.env.HTTP_PROXY;
   delete process.env.HTTPS_PROXY;
+  delete process.env.http_proxy;
+  delete process.env.https_proxy;
+
+  // Explicitly bypass proxy for Discord domains (safety net)
+  process.env.NO_PROXY = 'discord.com,gateway.discord.gg,discordapp.com,*.discord.com';
+  process.env.no_proxy = process.env.NO_PROXY;
 
   console.log('[Discord Bot] Attempting to connect to Discord gateway...');
+
+  // 30-second timeout — if login hangs, surface the error
+  const loginTimeout = setTimeout(() => {
+    console.error('[Discord Bot] Login timed out after 30s — possible network block or bad token.');
+  }, 30_000);
+
   client.login(process.env.DISCORD_BOT_TOKEN)
     .then(() => {
+      clearTimeout(loginTimeout);
       console.log('[Discord Bot] Login call succeeded — waiting for clientReady event...');
-      // Restore proxy after login so webhook calls still work
-      if (savedHttpProxy) process.env.HTTP_PROXY = savedHttpProxy;
-      if (savedHttpsProxy) process.env.HTTPS_PROXY = savedHttpsProxy;
     })
     .catch(err => {
-      console.error('[Discord Bot] Failed to login:', err.message);
-      if (savedHttpProxy) process.env.HTTP_PROXY = savedHttpProxy;
-      if (savedHttpsProxy) process.env.HTTPS_PROXY = savedHttpsProxy;
+      clearTimeout(loginTimeout);
+      console.error('[Discord Bot] Failed to login:', err.message, err.stack);
     });
 }
